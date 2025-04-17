@@ -140,7 +140,9 @@ fn recover_secret_from_image(image_path: &str) -> io::Result<Vec<u8>> {
 
 
 fn hash_password(password: &[u8], salt: &[u8]) -> Result<Vec<u8>, io::Error> {
-    let mut hashed_password: Vec<u8> = vec![0u8; 32]; // The Aes256Gcm cipher requires a 256-bit key (32 bytes)
+    // The Aes256Gcm cipher requires a 256-bit key (32 bytes)
+    let mut hashed_password: Vec<u8> = vec![0u8; 32];
+    // Argon2 with default params (Argon2id v19)
     Argon2::default()
         .hash_password_into(password, salt, &mut hashed_password)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
