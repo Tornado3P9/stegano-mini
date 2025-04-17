@@ -63,11 +63,11 @@ fn steghide_png_image(image_path: &str, secret: &[u8]) -> io::Result<()> {
     let (width, height) = img.dimensions();
     let mut img_buffer = img.to_rgb8();
 
-    // Check if the image can hold the secret
-    if (width * height) < secret.len() as u32 {
+    // Check if the image can hold the secret and the 4 pixels for length
+    if (width * height) < (secret.len() as u32 + 4) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Image dimensions are insufficient to hold the secret data",
+            "Image dimensions are insufficient to hold the secret data and length encoding",
         ));
     }
 
@@ -169,12 +169,12 @@ fn main() -> io::Result<()> {
             
             // Generate Hash from Password
             // let password = b"hunter42"; // example password
-            let password: String = get_user_input();
+            let password: String = get_user_input(true);
             let password_bytes: &[u8] = password.as_bytes();
             let salt: Vec<u8> = generate_random_key(salt_size); // Salt should be unique per password
             let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt) {
                 Ok(hash) => {
-                    println!("Password hashed successfully.");
+                    // println!("Password hashed successfully.");
                     hash
                 }
                 Err(e) => {
@@ -277,7 +277,7 @@ fn main() -> io::Result<()> {
             println!("Extracting from stego file: {}", stegofile);
             
             // Recover the secret from the image
-            let recovered_data = recover_secret_from_image("output.png")?;
+            let recovered_data = recover_secret_from_image(stegofile)?;
             println!("recovered_data: {:?}", recovered_data);
 
             // Decrypt:
@@ -290,12 +290,12 @@ fn main() -> io::Result<()> {
             let extracted_nonce = Nonce::from_slice(nonce_bytes);
 
             // Generate Hash from Password
-            let password: String = get_user_input();
+            let password: String = get_user_input(false);
             let password_bytes: &[u8] = password.as_bytes();
 
             let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt_bytes) {
                 Ok(hash) => {
-                    println!("Password hashed successfully.");
+                    // println!("Password hashed successfully.");
                     hash
                 }
                 Err(e) => {
@@ -332,7 +332,7 @@ fn main() -> io::Result<()> {
 }
 
 
-fn get_user_input() -> String {
+fn get_user_input(confirm: bool) -> String {
     loop {
         println!("Please enter a passphrase: ");
         let user_input = read_password().expect("Failed to read passphrase");
@@ -343,14 +343,18 @@ fn get_user_input() -> String {
             continue;
         }
 
-        println!("Please re-enter your passphrase for confirmation: ");
-        let confirm_input = read_password().expect("Failed to read passphrase");
+        if confirm {
+            println!("Please re-enter your passphrase for confirmation: ");
+            let confirm_input = read_password().expect("Failed to read passphrase");
 
-        if user_input == confirm_input {
-            return user_input;
+            if user_input == confirm_input {
+                return user_input;
+            } else {
+                println!("Passphrases do not match. Please try again.");
+                println!();
+            }
         } else {
-            println!("Passphrases do not match. Please try again.");
-            println!();
+            return user_input;
         }
     }
 }
