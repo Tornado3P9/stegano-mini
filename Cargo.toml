@@ -1,0 +1,12 @@
+[package]
+name = "stegano-mini"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes-gcm = "0.10.3"
+argon2 = "0.5.3"
+clap = { version = "4.5.36", features = ["derive"] }
+fstrings = "0.2.3"
+image = "0.25.6"
+rpassword = "7.3.1"
