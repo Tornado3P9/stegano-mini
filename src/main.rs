@@ -2,23 +2,18 @@
 // extern crate fstrings;
 
 use aes_gcm::{
-    aead::{generic_array::GenericArray, rand_core::RngCore, Aead, KeyInit, OsRng}, aes::cipher::typenum::UInt, AeadCore, Aes256Gcm, Key, Nonce
+    aead::{rand_core::RngCore, Aead, KeyInit, OsRng}, AeadCore, Aes256Gcm, Key, Nonce
 };
-use image::{GenericImageView, ImageBuffer, Rgba};
+use image::GenericImageView;
 use rpassword::read_password;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::str;
 use std::thread::sleep;
 use std::time::Duration;
-
-use image::ImageReader;
-use std::path::Path;
-
 use argon2::Argon2;  // https://docs.rs/argon2/0.5.3/argon2/ , https://crates.io/crates/argon2
-
-
 use clap::{Parser, Subcommand};
+
 
 /// Stegano-Mini
 #[derive(Parser, Debug)]
@@ -27,6 +22,7 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
+
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -46,6 +42,47 @@ enum Commands {
         #[arg(short, long, value_name = "STEGOFILE")]
         stegofile: String,
     },
+}
+
+
+fn import_secret_text_file(file_path: &str) -> io::Result<Vec<u8>> {
+    // // Check if the file has a .txt extension
+    // let path = std::path::Path::new(file_path);
+    // if path.extension().and_then(|ext| ext.to_str()) != Some("txt") {
+    //     return Err(io::Error::new(
+    //         io::ErrorKind::InvalidInput,
+    //         "The file is not a .txt file.",
+    //     ));
+    // }
+    if !file_path.to_lowercase().ends_with(".txt") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "The file is not a .txt file.",
+        ));
+    }
+
+    let mut data_file = File::open(file_path).map_err(|e| {
+        if e.kind() == io::ErrorKind::NotFound {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("File not found: {}", file_path),
+            )
+        } else {
+            e
+        }
+    })?;
+
+    let mut data_buffer = Vec::new();
+    data_file.read_to_end(&mut data_buffer)?;
+
+    if data_buffer.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "The data buffer is empty.",
+        ));
+    }
+
+    Ok(data_buffer)
 }
 
 
@@ -89,7 +126,7 @@ fn steghide_png_image(image_path: &str, secret: &[u8]) -> io::Result<()> {
             break;
         }
         let pixel = img_buffer.get_pixel_mut(x, y);
-        pixel[0] = byte; // Consider using pixel[1] and pixel[2] for more capacity...currently only using the red component for both length encoding and secret embedding.
+        pixel[0] = byte; // Consider using pixel[1] and pixel[2] for more capacity, currently using red component for both length encoding and secret embedding.
     }
 
     img_buffer
@@ -132,7 +169,7 @@ fn recover_secret_from_image(image_path: &str) -> io::Result<Vec<u8>> {
             break;
         }
         let pixel = img_buffer.get_pixel(x, y);
-        secret.push(pixel[0]); // Consider using pixel[1] and pixel[2] for more capacity
+        secret.push(pixel[0]); // Remember to change this line too if you decide to also use pixel[1] and pixel[2] in steghide_png_image()
     }
 
     Ok(secret)
@@ -166,9 +203,10 @@ fn main() -> io::Result<()> {
     match &cli.command {
         Commands::Embed { coverfile, embedfile } => {
             println!("Embedding file: {} into cover file: {}", embedfile, coverfile);
+
+            let plaintext: Vec<u8> = import_secret_text_file(embedfile)?;
             
             // Generate Hash from Password
-            // let password = b"hunter42"; // example password
             let password: String = get_user_input(true);
             let password_bytes: &[u8] = password.as_bytes();
             let salt: Vec<u8> = generate_random_key(salt_size); // Salt should be unique per password
@@ -194,91 +232,36 @@ fn main() -> io::Result<()> {
 
 
             // Encrypt:
-            // let plaintext_str: &[u8] = b"plaintext message";
-            let plaintext_string: String = String::from("plaintext message");
-            let plaintext: &[u8] = plaintext_string.as_bytes();
-
             let ciphertext: Vec<u8> = cipher
                 .encrypt(&nonce, plaintext.as_ref())
                 .expect("encryption failure!");
-            assert_ne!(&ciphertext, plaintext);
+            assert_ne!(&ciphertext, &plaintext);
 
             // let combined: Vec<u8> = [nonce.to_vec(), salt, ciphertext.clone()].concat();
             let mut combined: Vec<u8> = nonce.to_vec();
             combined.extend_from_slice(&salt);
             combined.extend_from_slice(&ciphertext);
 
-
-            // {   /******** test combined 2 ******* */
-            //     let (nonce_slice, ciphertext_bytes): (&[u8], &[u8]) = combined.split_at(nonce_size);
-            //     let nonce_bytes: &[u8; 12] = match nonce_slice.try_into() {
-            //         Ok(array_ref) => array_ref,
-            //         Err(_) => panic!("Slice length mismatch!"),
-            //     };
-            //     let extracted_nonce = Nonce::from_slice(nonce_bytes);
-
-            //     let decrypted_plaintext: Vec<u8> = cipher
-            //         .decrypt(&extracted_nonce, ciphertext_bytes.as_ref())
-            //         .expect("decryption failure!");
-            //     assert_eq!(&decrypted_plaintext, plaintext);
-            // }
-
-
-            // {   /******** test combined 3 ******* */
-            //     let (nonce_slice, salt_ciphertext_bytes): (&[u8], &[u8]) = combined.split_at(nonce_size);
-            //     let (salt_bytes, ciphertext_bytes): (&[u8], &[u8]) = salt_ciphertext_bytes.split_at(salt_size);
-            //     let nonce_bytes: &[u8; 12] = match nonce_slice.try_into() {
-            //         Ok(array_ref) => array_ref,
-            //         Err(_) => panic!("Slice length mismatch!"),
-            //     };
-            //     let extracted_nonce = Nonce::from_slice(nonce_bytes);
-
-            //     // Generate Hash from Password
-            //     // let password_r = b"hunter42"; // Bad password; don't actually use!
-            //     let password_r = password_bytes;
-                
-            //     let hashed_password_r: Vec<u8> = match hash_password(password_r, &salt_bytes) {
-            //         Ok(hash) => {
-            //             println!("Password hashed successfully.");
-            //             hash
-            //         }
-            //         Err(e) => {
-            //             eprintln!("Error hashing password: {}", e);
-            //             return Err(e);
-            //         }
-            //     };
-
-            //     // Generate Key from Hash
-            //     let key_r = Key::<Aes256Gcm>::from_slice(&hashed_password_r);
-            //     let cipher_r = Aes256Gcm::new(key_r);
-
-            //     let decrypted_plaintext: Vec<u8> = cipher_r
-            //         .decrypt(&extracted_nonce, ciphertext_bytes.as_ref())
-            //         .expect("decryption failure!");
-            //     assert_eq!(&decrypted_plaintext, plaintext);
-            // }
-
             // Write data to image
-            let image_path = "image.png";
-            steghide_png_image(image_path, &combined)?;
+            steghide_png_image(coverfile, &combined)?;
             println!("ciphertext.len(): {:?}", ciphertext.len());
             println!("combined.len(): {:?}", combined.len());
-            println!("combined data: {:?}", &combined);
+            println!("combined data: {:?} ...first ten items", &combined[0..10]);
 
-            // Introduce a 3-second delay
-            sleep(Duration::from_secs(3));
+            // Introduce a 1-second delay
+            sleep(Duration::from_secs(1));
 
             // Recover the secret from the image
-            let recovered_data = recover_secret_from_image("output.png")?;
-            println!("recovered_data: {:?}", recovered_data);
+            let recovered_data: Vec<u8> = recover_secret_from_image("output.png")?;
+            println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
             assert_eq!(recovered_data, combined);
         }
         Commands::Extract { stegofile } => {
             println!("Extracting from stego file: {}", stegofile);
             
             // Recover the secret from the image
-            let recovered_data = recover_secret_from_image(stegofile)?;
-            println!("recovered_data: {:?}", recovered_data);
+            let recovered_data: Vec<u8> = recover_secret_from_image(stegofile)?;
+            println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
 
             // Decrypt:
             let (nonce_slice, salt_ciphertext_bytes): (&[u8], &[u8]) = recovered_data.split_at(nonce_size);
@@ -292,7 +275,6 @@ fn main() -> io::Result<()> {
             // Generate Hash from Password
             let password: String = get_user_input(false);
             let password_bytes: &[u8] = password.as_bytes();
-
             let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt_bytes) {
                 Ok(hash) => {
                     // println!("Password hashed successfully.");
@@ -308,16 +290,13 @@ fn main() -> io::Result<()> {
             let key = Key::<Aes256Gcm>::from_slice(&hashed_password);
             let cipher = Aes256Gcm::new(key);
 
-            let plaintext_string: String = String::from("plaintext message");
-            let plaintext: &[u8] = plaintext_string.as_bytes();
-
+            // Decrypt ciphertext_bytes
             let decrypted_plaintext: Vec<u8> = cipher
                 .decrypt(&extracted_nonce, ciphertext_bytes.as_ref())
                 .expect("decryption failure!");
-            assert_eq!(&decrypted_plaintext, plaintext);
 
             // Write the plaintext to a text file
-            let mut file = File::create("text.txt").map_err(|e| {
+            let mut file = File::create("output.txt").map_err(|e| {
                 eprintln!("Failed to create file: {}", e);
                 e
             })?;
