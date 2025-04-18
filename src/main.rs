@@ -244,24 +244,30 @@ fn main() -> io::Result<()> {
 
             // Write data to image
             steghide_png_image(coverfile, &combined)?;
-            println!("ciphertext.len(): {:?}", ciphertext.len());
-            println!("combined.len(): {:?}", combined.len());
-            println!("combined data: {:?} ...first ten items", &combined[0..10]);
+            // println!("ciphertext.len(): {:?}", ciphertext.len());
+            // println!("combined.len(): {:?}", combined.len());
 
             // Introduce a 1-second delay
             sleep(Duration::from_secs(1));
 
             // Recover the secret from the image
             let recovered_data: Vec<u8> = recover_secret_from_image("output.png")?;
-            println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
-            assert_eq!(recovered_data, combined);
+
+            // assert_eq!(recovered_data, combined);
+            if recovered_data == combined {
+                println!("Job finished!");
+            } else {
+                println!("combined data: {:?} ...first ten items", &combined[0..10]);
+                println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
+                println!("Test failed: recovered_data from the embedded image does not match the original!");
+            }
         }
         Commands::Extract { stegofile } => {
             println!("Extracting from stego file: {}", stegofile);
             
             // Recover the secret from the image
             let recovered_data: Vec<u8> = recover_secret_from_image(stegofile)?;
-            println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
+            // println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
 
             // Decrypt:
             let (nonce_slice, salt_ciphertext_bytes): (&[u8], &[u8]) = recovered_data.split_at(nonce_size);
@@ -310,7 +316,8 @@ fn main() -> io::Result<()> {
                     return Err(io::Error::new(io::ErrorKind::Other, "Decryption failed"));
                 }
             }
-
+            
+            println!("Job finished!");
         }
     }
 
