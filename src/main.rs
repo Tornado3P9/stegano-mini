@@ -207,7 +207,7 @@ fn main() -> io::Result<()> {
             let plaintext: Vec<u8> = import_secret_text_file(embedfile)?;
             
             // Generate Hash from Password
-            let password: String = get_user_input(true);
+            let password: String = get_user_input(true)?;
             let password_bytes: &[u8] = password.as_bytes();
             let salt: Vec<u8> = generate_random_key(salt_size); // Salt should be unique per password
             let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt) {
@@ -273,7 +273,7 @@ fn main() -> io::Result<()> {
             let extracted_nonce = Nonce::from_slice(nonce_bytes);
 
             // Generate Hash from Password
-            let password: String = get_user_input(false);
+            let password: String = get_user_input(false)?;
             let password_bytes: &[u8] = password.as_bytes();
             let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt_bytes) {
                 Ok(hash) => {
@@ -311,29 +311,29 @@ fn main() -> io::Result<()> {
 }
 
 
-fn get_user_input(confirm: bool) -> String {
+fn get_user_input(confirm: bool) -> Result<String, std::io::Error> {
     loop {
-        println!("Please enter a passphrase: ");
-        let user_input = read_password().expect("Failed to read passphrase");
+        print!("Please enter a passphrase: ");
+        std::io::stdout().flush()?;
+        let user_input: String = read_password()?;
 
         if user_input.len() < 12 {
-            println!("Input too short. Your passphrase must be at least 12 characters long. Please ensure it includes a mix of letters, numbers, and special characters to enhance security.");
-            println!();
+            println!("Input too short. Your passphrase must be at least 12 characters long. Please ensure it includes a mix of letters, numbers, and special characters to enhance security.\n");
             continue;
         }
 
         if confirm {
-            println!("Please re-enter your passphrase for confirmation: ");
-            let confirm_input = read_password().expect("Failed to read passphrase");
+            print!("Please re-enter your passphrase for confirmation: ");
+            std::io::stdout().flush()?;
+            let confirm_input: String = read_password()?;
 
             if user_input == confirm_input {
-                return user_input;
+                return Ok(user_input);
             } else {
-                println!("Passphrases do not match. Please try again.");
-                println!();
+                println!("Passphrases do not match. Please try again.\n");
             }
         } else {
-            return user_input;
+            return Ok(user_input);
         }
     }
 }
