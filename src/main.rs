@@ -291,19 +291,26 @@ fn main() -> io::Result<()> {
             let cipher = Aes256Gcm::new(key);
 
             // Decrypt ciphertext_bytes
-            let decrypted_plaintext: Vec<u8> = cipher
-                .decrypt(&extracted_nonce, ciphertext_bytes.as_ref())
-                .expect("decryption failure!");
+            let decryption_result: Result<Vec<u8>, _> = cipher.decrypt(&extracted_nonce, ciphertext_bytes.as_ref());
 
-            // Write the plaintext to a text file
-            let mut file = File::create("output.txt").map_err(|e| {
-                eprintln!("Failed to create file: {}", e);
-                e
-            })?;
-            file.write_all(&decrypted_plaintext).map_err(|e| {
-                eprintln!("Failed to write to file: {}", e);
-                e
-            })?;
+            match decryption_result {
+                Ok(decrypted_plaintext) => {
+                    // Write the plaintext to a text file
+                    let mut file = File::create("output.txt").map_err(|e| {
+                        eprintln!("Failed to create file: {}", e);
+                        e
+                    })?;
+                    file.write_all(&decrypted_plaintext).map_err(|e| {
+                        eprintln!("Failed to write to file: {}", e);
+                        e
+                    })?;
+                }
+                Err(_) => {
+                    eprintln!("Decryption failed: Incorrect password or corrupted data.");
+                    return Err(io::Error::new(io::ErrorKind::Other, "Decryption failed"));
+                }
+            }
+
         }
     }
 
@@ -317,12 +324,12 @@ fn get_user_input(confirm: bool) -> Result<String, std::io::Error> {
         std::io::stdout().flush()?;
         let user_input: String = read_password()?;
 
-        if user_input.len() < 12 {
-            println!("Input too short. Your passphrase must be at least 12 characters long. Please ensure it includes a mix of letters, numbers, and special characters to enhance security.\n");
-            continue;
-        }
-
         if confirm {
+            if user_input.len() < 12 {
+                println!("Input too short. Your passphrase must be at least 12 characters long. Please ensure it includes a mix of letters, numbers, and special characters to enhance security.\n");
+                continue;
+            }
+    
             print!("Please re-enter your passphrase for confirmation: ");
             std::io::stdout().flush()?;
             let confirm_input: String = read_password()?;
