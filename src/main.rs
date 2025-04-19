@@ -1,18 +1,16 @@
-// #[macro_use]
-// extern crate fstrings;
-
 use aes_gcm::{
     aead::{rand_core::RngCore, Aead, KeyInit, OsRng}, AeadCore, Aes256Gcm, Key, Nonce
 };
-use image::GenericImageView;
 use rpassword::read_password;
 use std::fs::File;
-use std::io::{self, Read, Write};
 use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 use argon2::Argon2;  // https://docs.rs/argon2/0.5.3/argon2/ , https://crates.io/crates/argon2
-use clap::{Parser, Subcommand};
+use clap::{builder::Str, Parser, Subcommand};
+
+use image::{DynamicImage, GenericImageView, Pixel, RgbaImage};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 
 
 /// Stegano-Mini
@@ -45,22 +43,7 @@ enum Commands {
 }
 
 
-fn import_secret_text_file(file_path: &str) -> io::Result<Vec<u8>> {
-    // // Check if the file has a .txt extension
-    // let path = std::path::Path::new(file_path);
-    // if path.extension().and_then(|ext| ext.to_str()) != Some("txt") {
-    //     return Err(io::Error::new(
-    //         io::ErrorKind::InvalidInput,
-    //         "The file is not a .txt file.",
-    //     ));
-    // }
-    if !file_path.to_lowercase().ends_with(".txt") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "The file is not a .txt file.",
-        ));
-    }
-
+fn import_embedfile(file_path: &str) -> Result<Vec<u8>, io::Error> { // io::Result<Vec<u8>> {
     let mut data_file = File::open(file_path).map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
             io::Error::new(
@@ -86,102 +69,86 @@ fn import_secret_text_file(file_path: &str) -> io::Result<Vec<u8>> {
 }
 
 
-fn steghide_png_image(image_path: &str, secret: &[u8]) -> io::Result<()> {
-    // Check if the file is a PNG
-    if !image_path.to_lowercase().ends_with(".png") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "The image must be a PNG file",
-        ));
-    }
-
-    // Load the image file
-    let img = image::open(image_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+fn hide_message_in_image(input_path: &str, output_path: &str, message_bytes: &[u8]) -> Result<(), io::Error> {
+    let img = image::open(input_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let (width, height) = img.dimensions();
-    let mut img_buffer = img.to_rgb8();
+    let mut img = img.to_rgba8();
 
-    // Check if the image can hold the secret and the 4 pixels for length
-    if (width * height) < (secret.len() as u32 + 4) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Image dimensions are insufficient to hold the secret data and length encoding",
-        ));
+    let message_bits_count = message_bytes.len() * 8;
+    let available_bits = (width * height * 4) as usize; // 4 channels per pixel
+
+    if message_bits_count + 32 > available_bits {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Image is too small to hold the message."));
     }
 
-    // Encode the length of the secret in the first 4 pixels
-    let secret_length = secret.len() as u32;
-    for i in 0..4 {
-        let x = i as u32;
-        let y = 0;
-        let pixel = img_buffer.get_pixel_mut(x, y);
-        pixel[0] = (secret_length >> (8 * i)) as u8;
-    }
+    let message_len = message_bytes.len() as u32;
+    // println!("Message length: {}", message_len);
+    // println!("Message Bytes: {:?}", message_bytes);
 
-    // Embed the secret starting after the length encoding
-    for (i, &byte) in secret.iter().enumerate() {
-        let index = i + 4; // Start after the first 4 pixels
-        let x = (index as u32) % width;
-        let y = (index as u32) / width;
-        if y >= height {
-            break;
+    let binding = message_len.to_be_bytes();
+    let mut message_bits = binding.iter()
+        .flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1))
+        .chain(message_bytes.iter().flat_map(|&byte| (0..8).rev().map(move |i| (byte >> i) & 1)));
+
+    for y in 0..height {
+        for x in 0..width {
+            let pixel = img.get_pixel_mut(x, y);
+            let channels = pixel.channels_mut();
+
+            for channel in channels.iter_mut() {
+                if let Some(bit) = message_bits.next() {
+                    *channel = (*channel & !1) | bit; // !1 == 0b11111110 == 0xFE // pixel[i] = (pixel[i] & 0xFE) | bit; // Modify the LSB of the red channel
+                }
+            }
         }
-        let pixel = img_buffer.get_pixel_mut(x, y);
-        pixel[0] = byte; // Consider using pixel[1] and pixel[2] for more capacity, currently using red component for both length encoding and secret embedding.
     }
 
-    img_buffer
-        .save("output.png")
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    img.save(output_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     Ok(())
 }
 
 
-fn recover_secret_from_image(image_path: &str) -> io::Result<Vec<u8>> {
-    // Check if the file is a PNG
-    if !image_path.to_lowercase().ends_with(".png") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "The image must be a PNG file",
-        ));
-    }
-
-    // Load the image file
+fn extract_message_from_image(image_path: &str) -> Result<Vec<u8>, io::Error> {
     let img = image::open(image_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
     let (width, height) = img.dimensions();
-    let img_buffer = img.to_rgb8();
+    let img = img.to_rgba8();
 
-    // Decode the length of the secret from the first 4 pixels
-    let mut secret_length = 0u32;
-    for i in 0..4 {
-        let x = i as u32;
-        let y = 0;
-        let pixel = img_buffer.get_pixel(x, y);
-        secret_length |= (pixel[0] as u32) << (8 * i);
-    }
+    let mut message_bits = Vec::new();
 
-    // Use the decoded length to extract the secret
-    let mut secret = Vec::new();
-    for i in 0..secret_length as usize {
-        let index = i + 4; // Start after the first 4 pixels
-        let x = (index as u32) % width;
-        let y = (index as u32) / width;
-        if y >= height {
-            break;
+    for y in 0..height {
+        for x in 0..width {
+            let pixel = img.get_pixel(x, y);
+            let channels = pixel.channels();
+
+            for &channel in channels.iter() {
+                message_bits.push(channel & 1);
+            }
         }
-        let pixel = img_buffer.get_pixel(x, y);
-        secret.push(pixel[0]); // Remember to change this line too if you decide to also use pixel[1] and pixel[2] in steghide_png_image()
     }
 
-    Ok(secret)
+    let message_len_bits = &message_bits[..32];
+    let message_len = message_len_bits.iter().enumerate().fold(0u32, |acc, (i, &bit)| {
+        acc | ((bit as u32) << (31 - i))
+    });
+
+    let message_bits = &message_bits[32..(32 + message_len as usize * 8)];
+    let message_bytes: Vec<u8> = message_bits.chunks(8).map(|byte_bits| {
+        byte_bits.iter().enumerate().fold(0u8, |acc, (i, &bit)| {
+            acc | (bit << (7 - i))
+        })
+    }).collect();
+
+    Ok(message_bytes)
 }
 
 
-fn hash_password(password: &[u8], salt: &[u8]) -> Result<Vec<u8>, io::Error> {
+fn hash_password(password: String, salt: &[u8]) -> Result<Vec<u8>, io::Error> {
+    let password_bytes: &[u8] = password.as_bytes();
     // The Aes256Gcm cipher requires a 256-bit key (32 bytes)
     let mut hashed_password: Vec<u8> = vec![0u8; 32];
     // Argon2 with default params (Argon2id v19)
     Argon2::default()
-        .hash_password_into(password, salt, &mut hashed_password)
+        .hash_password_into(password_bytes, salt, &mut hashed_password)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
     Ok(hashed_password)
 }
@@ -202,15 +169,28 @@ fn main() -> io::Result<()> {
 
     match &cli.command {
         Commands::Embed { coverfile, embedfile } => {
+            let outputfile: &str = "output.png";
             println!("Embedding file: {} into cover file: {}", embedfile, coverfile);
+            println!("Write result back to file: {}", outputfile);
 
-            let plaintext: Vec<u8> = import_secret_text_file(embedfile)?;
+            if !coverfile.to_lowercase().ends_with(".png") {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput,"The cover image must be of PNG format"));
+            }
+
+            if !embedfile.to_lowercase().ends_with(".txt") {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput,"The embed file must be of TXT format"));
+            }
+            // let path = std::path::Path::new(embedfile);
+            // if path.extension().and_then(|ext| ext.to_str()) != Some("txt") {
+            //     return Err(io::Error::new(io::ErrorKind::InvalidInput,"The embed file must be of TXT format"));
+            // }
+        
+            let plaintext: Vec<u8> = import_embedfile(embedfile)?;
             
             // Generate Hash from Password
             let password: String = get_user_input(true)?;
-            let password_bytes: &[u8] = password.as_bytes();
             let salt: Vec<u8> = generate_random_key(salt_size); // Salt should be unique per password
-            let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt) {
+            let hashed_password: Vec<u8> = match hash_password(password, &salt) {
                 Ok(hash) => {
                     // println!("Password hashed successfully.");
                     hash
@@ -225,9 +205,11 @@ fn main() -> io::Result<()> {
             let key = Key::<Aes256Gcm>::from_slice(&hashed_password);
             let cipher = Aes256Gcm::new(key);
             let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // nonce (or initialization vector, IV); 96-bits (12 bytes); unique per message
-            // let key = Aes256Gcm::generate_key(&mut OsRng);
-            // let cipher = Aes256Gcm::new(&key);
-            // let nonce = Nonce::from_slice(b"unique nonce");  // Example nonce (12 bytes)
+            // {
+            //     let key = Aes256Gcm::generate_key(&mut OsRng);
+            //     let cipher = Aes256Gcm::new(&key);
+            //     let nonce = Nonce::from_slice(b"unique nonce");  // Example nonce (12 bytes)
+            // }
             assert_eq!(nonce.len(), nonce_size);
 
 
@@ -243,31 +225,24 @@ fn main() -> io::Result<()> {
             combined.extend_from_slice(&ciphertext);
 
             // Write data to image
-            steghide_png_image(coverfile, &combined)?;
-            // println!("ciphertext.len(): {:?}", ciphertext.len());
-            // println!("combined.len(): {:?}", combined.len());
+            hide_message_in_image(coverfile, outputfile, combined.as_slice())?; // data_vec.as_slice() == &data_vec
 
             // Introduce a 1-second delay
-            sleep(Duration::from_secs(1));
+            // sleep(Duration::from_secs(1));
+            sleep(Duration::from_millis(1_000));
 
-            // Recover the secret from the image
-            let recovered_data: Vec<u8> = recover_secret_from_image("output.png")?;
-
-            // assert_eq!(recovered_data, combined);
-            if recovered_data == combined {
+            // Test recovering hidden message
+            let extracted_message: Vec<u8> = extract_message_from_image(outputfile)?;
+            if extracted_message == combined {
                 println!("Job finished!");
             } else {
-                println!("combined data: {:?} ...first ten items", &combined[0..10]);
-                println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
-                println!("Test failed: recovered_data from the embedded image does not match the original!");
+                println!("Test failed: The extracted message does not match the original!");
             }
         }
         Commands::Extract { stegofile } => {
             println!("Extracting from stego file: {}", stegofile);
             
-            // Recover the secret from the image
-            let recovered_data: Vec<u8> = recover_secret_from_image(stegofile)?;
-            // println!("recovered_data: {:?} ...first ten items", &recovered_data[0..10]);
+            let recovered_data: Vec<u8> = extract_message_from_image(stegofile)?;
 
             // Decrypt:
             let (nonce_slice, salt_ciphertext_bytes): (&[u8], &[u8]) = recovered_data.split_at(nonce_size);
@@ -280,8 +255,7 @@ fn main() -> io::Result<()> {
 
             // Generate Hash from Password
             let password: String = get_user_input(false)?;
-            let password_bytes: &[u8] = password.as_bytes();
-            let hashed_password: Vec<u8> = match hash_password(password_bytes, &salt_bytes) {
+            let hashed_password: Vec<u8> = match hash_password(password, &salt_bytes) {
                 Ok(hash) => {
                     // println!("Password hashed successfully.");
                     hash
