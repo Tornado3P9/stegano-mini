@@ -22,12 +22,13 @@ Options:
 <!-- ```bash
 Embed data into a PNG image file
 
-Usage: stegano-mini embed --coverfile <COVERFILE> --embedfile <EMBEDFILE>
+Usage: stegano-mini embed [OPTIONS] --coverfile <COVERFILE> --embedfile <EMBEDFILE>
 
 Options:
-  -c, --coverfile <COVERFILE>  Path to the cover PNG image file
-  -e, --embedfile <EMBEDFILE>  Path to the file to embed
-  -h, --help                   Print help
+  -c, --coverfile <COVERFILE>    Path to the cover PNG image file
+  -e, --embedfile <EMBEDFILE>    Path to the file to embed
+  -o, --outputfile <OUTPUTFILE>  Optional path to the output PNG image file [default: output.png]
+  -h, --help                     Print help
 ``` -->
 
 ## Extract
@@ -37,11 +38,12 @@ Options:
 <!-- ```bash
 Extract data from a PNG image file
 
-Usage: stegano-mini extract --stegofile <STEGOFILE>
+Usage: stegano-mini extract [OPTIONS] --stegofile <STEGOFILE>
 
 Options:
-  -s, --stegofile <STEGOFILE>  Path to the stego PNG image file that holds the secret data
-  -h, --help                   Print help
+  -s, --stegofile <STEGOFILE>    Path to the stego PNG image file that holds the secret data
+  -o, --outputfile <OUTPUTFILE>  Optional path to the output TXT file [default: output.txt]
+  -h, --help                     Print help
 ``` -->
 
 ## Help

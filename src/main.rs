@@ -7,10 +7,9 @@ use std::str;
 use std::thread::sleep;
 use std::time::Duration;
 use argon2::Argon2;  // https://docs.rs/argon2/0.5.3/argon2/ , https://crates.io/crates/argon2
-use clap::{builder::Str, Parser, Subcommand};
-
-use image::{DynamicImage, GenericImageView, Pixel, RgbaImage};
-use std::io::{self, BufReader, BufWriter, Read, Write};
+use clap::{Parser, Subcommand};
+use image::{GenericImageView, Pixel};
+use std::io::{self, Read, Write};
 
 
 /// Stegano-Mini
@@ -33,12 +32,20 @@ enum Commands {
         /// Path to the file to embed
         #[arg(short, long, value_name = "EMBEDFILE")]
         embedfile: String,
+
+        /// Optional path to the output PNG image file
+        #[arg(short, long, value_name = "OUTPUTFILE", default_value = "output.png")]
+        outputfile: String,
     },
     /// Extract data from a PNG image file
     Extract {
         /// Path to the stego PNG image file that holds the secret data
         #[arg(short, long, value_name = "STEGOFILE")]
         stegofile: String,
+
+        /// Optional path to the output TXT file
+        #[arg(short, long, value_name = "OUTPUTFILE", default_value = "output.txt")]
+        outputfile: String,
     },
 }
 
@@ -168,8 +175,7 @@ fn main() -> io::Result<()> {
     let salt_size: usize = 16;  // Used by Argon2
 
     match &cli.command {
-        Commands::Embed { coverfile, embedfile } => {
-            let outputfile: &str = "output.png";
+        Commands::Embed { coverfile, embedfile, outputfile } => {
             println!("Embedding file: {} into cover file: {}", embedfile, coverfile);
             println!("Write result back to file: {}", outputfile);
 
@@ -239,8 +245,8 @@ fn main() -> io::Result<()> {
                 println!("Test failed: The extracted message does not match the original!");
             }
         }
-        Commands::Extract { stegofile } => {
-            println!("Extracting from stego file: {}", stegofile);
+        Commands::Extract { stegofile, outputfile } => {
+            println!("Extracting from stego file: {} to output file: {}", stegofile, outputfile);
             
             let recovered_data: Vec<u8> = extract_message_from_image(stegofile)?;
 
@@ -276,7 +282,7 @@ fn main() -> io::Result<()> {
             match decryption_result {
                 Ok(decrypted_plaintext) => {
                     // Write the plaintext to a text file
-                    let mut file = File::create("output.txt").map_err(|e| {
+                    let mut file = File::create(outputfile).map_err(|e| {
                         eprintln!("Failed to create file: {}", e);
                         e
                     })?;
