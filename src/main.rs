@@ -43,14 +43,14 @@ enum Commands {
         #[arg(short, long, value_name = "STEGOFILE")]
         stegofile: String,
 
-        /// Optional path to the output TXT file
+        /// Optional path to the output file
         #[arg(short, long, value_name = "OUTPUTFILE", default_value = "output.txt")]
         outputfile: String,
     },
 }
 
 
-fn import_embedfile(file_path: &str) -> Result<Vec<u8>, io::Error> { // io::Result<Vec<u8>> {
+fn import_embedfile(file_path: &str) -> Result<Vec<u8>, io::Error> {
     let mut data_file = File::open(file_path).map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
             io::Error::new(
@@ -177,15 +177,15 @@ fn main() -> io::Result<()> {
     match &cli.command {
         Commands::Embed { coverfile, embedfile, outputfile } => {
             println!("Embedding file: {} into cover file: {}", embedfile, coverfile);
-            println!("Write result back to file: {}", outputfile);
+            println!("and write result back to the file: {}", outputfile);
 
             if !coverfile.to_lowercase().ends_with(".png") {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput,"The cover image must be of PNG format"));
             }
 
-            if !embedfile.to_lowercase().ends_with(".txt") {
-                return Err(io::Error::new(io::ErrorKind::InvalidInput,"The embed file must be of TXT format"));
-            }
+            // if !embedfile.to_lowercase().ends_with(".txt") {
+            //     return Err(io::Error::new(io::ErrorKind::InvalidInput,"The embed file must be of TXT format"));
+            // }
             // let path = std::path::Path::new(embedfile);
             // if path.extension().and_then(|ext| ext.to_str()) != Some("txt") {
             //     return Err(io::Error::new(io::ErrorKind::InvalidInput,"The embed file must be of TXT format"));
@@ -233,9 +233,9 @@ fn main() -> io::Result<()> {
             // Write data to image
             hide_message_in_image(coverfile, outputfile, combined.as_slice())?; // data_vec.as_slice() == &data_vec
 
-            // Introduce a 1-second delay
+            // Introduce a short delay
             // sleep(Duration::from_secs(1));
-            sleep(Duration::from_millis(1_000));
+            sleep(Duration::from_millis(500));
 
             // Test recovering hidden message
             let extracted_message: Vec<u8> = extract_message_from_image(outputfile)?;
@@ -247,6 +247,10 @@ fn main() -> io::Result<()> {
         }
         Commands::Extract { stegofile, outputfile } => {
             println!("Extracting from stego file: {} to output file: {}", stegofile, outputfile);
+
+            // if !outputfile.to_lowercase().ends_with(".txt") {
+            //     return Err(io::Error::new(io::ErrorKind::InvalidInput,"The output file must be of TXT format"));
+            // }
             
             let recovered_data: Vec<u8> = extract_message_from_image(stegofile)?;
 

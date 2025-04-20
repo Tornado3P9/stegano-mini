@@ -1,5 +1,7 @@
 # stegano-mini
 
+Steganography tool for PNG file format.
+
 ```bash
 Stegano-Mini
 
@@ -17,7 +19,10 @@ Options:
 
 ## Embed
 
-`stegano-mini embed -c image.png -e secret.txt`
+```bash
+stegano-mini embed -c cover-image.png -e secret.txt
+stegano-mini embed -c cover-image.png -e secret.png -o image.png
+```
 
 <!-- ```bash
 Embed data into a PNG image file
@@ -33,7 +38,10 @@ Options:
 
 ## Extract
 
-`stegano-mini extract -s secret.png`
+```bash
+stegano-mini extract -s image.png
+stegano-mini extract -s image.png -o secret.png
+```
 
 <!-- ```bash
 Extract data from a PNG image file
@@ -42,7 +50,7 @@ Usage: stegano-mini extract [OPTIONS] --stegofile <STEGOFILE>
 
 Options:
   -s, --stegofile <STEGOFILE>    Path to the stego PNG image file that holds the secret data
-  -o, --outputfile <OUTPUTFILE>  Optional path to the output TXT file [default: output.txt]
+  -o, --outputfile <OUTPUTFILE>  Optional path to the output file [default: output.txt]
   -h, --help                     Print help
 ``` -->
 
@@ -57,4 +65,8 @@ stegano-mini help
 stegano-mini help embed
 stegano-mini embed -h
 stegano-mini embed --help
+
+stegano-mini help extract
+stegano-mini extract -h
+stegano-mini extract --help
 ```
