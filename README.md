@@ -19,6 +19,8 @@ Options:
 
 ## Embed
 
+Help: `stegano-mini embed -h`
+
 ```bash
 stegano-mini embed -c cover-image.png -e secret.txt
 stegano-mini embed -c cover-image.png -e secret.png -o image.png
@@ -38,6 +40,8 @@ Options:
 
 ## Extract
 
+Help: `stegano-mini extract -h`
+
 ```bash
 stegano-mini extract -s image.png
 stegano-mini extract -s image.png -o secret.png
@@ -52,7 +56,7 @@ Options:
   -s, --stegofile <STEGOFILE>    Path to the stego PNG image file that holds the secret data
   -o, --outputfile <OUTPUTFILE>  Optional path to the output file [default: output.txt]
   -h, --help                     Print help
-``` -->
+```
 
 ## Help
 
@@ -62,11 +66,11 @@ stegano-mini -h
 stegano-mini --help
 stegano-mini help
 
-stegano-mini help embed
 stegano-mini embed -h
 stegano-mini embed --help
+stegano-mini help embed
 
-stegano-mini help extract
 stegano-mini extract -h
 stegano-mini extract --help
-```
+stegano-mini help extract
+``` -->
