@@ -4,8 +4,8 @@ use aes_gcm::{
 use rpassword::read_password;
 use std::fs::File;
 use std::str;
-use std::thread::sleep;
-use std::time::Duration;
+// use std::thread::sleep;
+// use std::time::Duration;
 use argon2::Argon2;  // https://docs.rs/argon2/0.5.3/argon2/ , https://crates.io/crates/argon2
 use clap::{Parser, Subcommand};
 use image::{GenericImageView, Pixel};
@@ -232,18 +232,21 @@ fn main() -> io::Result<()> {
 
             // Write data to image
             hide_message_in_image(coverfile, outputfile, combined.as_slice())?; // data_vec.as_slice() == &data_vec
+            
+            // // Test recovering hidden message
+            // {
+            //     // Introduce a short delay
+            //     // sleep(Duration::from_secs(1));
+            //     sleep(Duration::from_millis(500));
+            //     let extracted_message: Vec<u8> = extract_message_from_image(outputfile)?;
+            //     if extracted_message == combined {
+            //         println!("Job finished!");
+            //     } else {
+            //         println!("Test failed: The extracted message does not match the original!");
+            //     }
+            // }
 
-            // Introduce a short delay
-            // sleep(Duration::from_secs(1));
-            sleep(Duration::from_millis(500));
-
-            // Test recovering hidden message
-            let extracted_message: Vec<u8> = extract_message_from_image(outputfile)?;
-            if extracted_message == combined {
-                println!("Job finished!");
-            } else {
-                println!("Test failed: The extracted message does not match the original!");
-            }
+            println!("Job finished!");
         }
         Commands::Extract { stegofile, outputfile } => {
             println!("Extracting from stego file: {} to output file: {}", stegofile, outputfile);
