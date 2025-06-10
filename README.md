@@ -38,7 +38,7 @@ Options:
 ## Extract
 
 ```bash
-stegano-mini extract -s image.png -o secret.png
+stegano-mini extract -s image.png -o secret.txt
 ```
 
 <!-- ```bash
