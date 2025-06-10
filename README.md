@@ -19,11 +19,8 @@ Options:
 
 ## Embed
 
-Help: `stegano-mini embed -h`
-
 ```bash
-stegano-mini embed -c cover-image.png -e secret.txt
-stegano-mini embed -c cover-image.png -e secret.png -o image.png
+stegano-mini embed -c cover-image.png -e secret.txt -o image.png
 ```
 
 <!-- ```bash
@@ -40,10 +37,7 @@ Options:
 
 ## Extract
 
-Help: `stegano-mini extract -h`
-
 ```bash
-stegano-mini extract -s image.png
 stegano-mini extract -s image.png -o secret.png
 ```
 
